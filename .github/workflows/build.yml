@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: build-${{ github.ref }}
@@ -160,8 +161,10 @@ jobs:
       - name: Prepare assets
         run: |
           cd release
-          ls -lh
-          sha256sum * > sha256sums.txt
+          pwd
+          ls -la
+          test -n "$(ls -A)"
+          sha256sum ./* > sha256sums.txt
           cat sha256sums.txt
 
       - name: Pick tag
