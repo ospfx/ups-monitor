@@ -14,19 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-      
+
       - name: Install dependencies
-        run: npm ci
-      
+        run: npm install --no-audit --no-fund
+
       - name: Build frontend
-        run: npm run build
-      
+        run: npx vite build
+
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
@@ -39,43 +38,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: dist/
-      
-      - name: Setup OpenWrt SDK
+
+      - name: Setup OpenWrt 23.05 SDK
         run: |
-          wget https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-          tar xf openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          wget -q https://downloads.openwrt.org/releases/23.05.5/targets/x86/64/openwrt-sdk-23.05.5-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          tar xf openwrt-sdk-*.tar.xz
           mv openwrt-sdk-* openwrt-sdk
-      
-      - name: Prepare package files
+
+      - name: Prepare package
         run: |
           mkdir -p openwrt-sdk/package/ups-monitor
-          cp -r openwrt/* openwrt-sdk/package/ups-monitor/
-          mkdir -p openwrt-sdk/package/ups-monitor/dist
-          cp -r dist/* openwrt-sdk/package/ups-monitor/dist/
-      
+          cp openwrt/Makefile openwrt-sdk/package/ups-monitor/
+          mkdir -p openwrt-sdk/package/ups-monitor/files
+          cp openwrt/files/ups-api.sh openwrt-sdk/package/ups-monitor/files/
+          cp -r dist openwrt-sdk/package/ups-monitor/dist
+
       - name: Build IPK
         run: |
           cd openwrt-sdk
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-          make package/ups-monitor/compile V=s
-      
-      - name: Find and upload IPK
+          make defconfig
+          make package/ups-monitor/compile V=s -j$(nproc)
+
+      - name: Collect IPK
         run: |
-          find openwrt-sdk/bin/packages -name "ups-monitor*.ipk" -exec cp {} ./ \;
-          ls -lh *.ipk
-      
+          mkdir -p artifacts
+          find openwrt-sdk/bin -name "ups-monitor*.ipk" -exec cp {} artifacts/ \;
+          ls -lh artifacts/
+
       - name: Upload IPK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ups-monitor-ipk-x86_64
-          path: "*.ipk"
+          path: artifacts/*.ipk
           retention-days: 30
 
   build-apk:
@@ -83,49 +83,64 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: dist/
-      
-      - name: Setup Alpine build environment
+
+      - name: Setup OpenWrt 24.10 SDK
         run: |
-          docker run --rm -v $PWD:/work alpine:latest sh -c "
-            apk add --no-cache alpine-sdk sudo
-            adduser -D builder
-            addgroup builder abuild
-            echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
-            su builder -c 'abuild-keygen -a -i -n'
-            cd /work
-            su builder -c 'abuild checksum'
-            su builder -c 'abuild -r'
-          "
-      
-      - name: Find and upload APK
+          sudo apt-get install -y zstd
+          wget -q "https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst" || \
+            wget -q "https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.xz"
+          tar xf openwrt-sdk-*.tar.* --use-compress-program=auto 2>/dev/null || tar xf openwrt-sdk-*.tar.zst || tar xf openwrt-sdk-*.tar.xz
+          mv openwrt-sdk-* openwrt-sdk
+
+      - name: Prepare package
         run: |
-          find ~/packages -name "ups-monitor*.apk" -exec cp {} ./ \; 2>/dev/null || echo "APK build completed"
-          ls -lh *.apk || echo "No APK found in current directory"
-      
+          mkdir -p openwrt-sdk/package/ups-monitor
+          cp openwrt/Makefile openwrt-sdk/package/ups-monitor/
+          mkdir -p openwrt-sdk/package/ups-monitor/files
+          cp openwrt/files/ups-api.sh openwrt-sdk/package/ups-monitor/files/
+          cp -r dist openwrt-sdk/package/ups-monitor/dist
+
+      - name: Build APK
+        run: |
+          cd openwrt-sdk
+          make defconfig
+          make package/ups-monitor/compile V=s -j$(nproc)
+
+      - name: Collect APK
+        run: |
+          mkdir -p artifacts
+          find openwrt-sdk/bin -name "ups-monitor*.apk" -exec cp {} artifacts/ \;
+          ls -lh artifacts/
+          if ! ls artifacts/*.apk >/dev/null 2>&1; then
+            echo "ERROR: no apk produced"
+            exit 1
+          fi
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ups-monitor-apk-x86_64
-          path: "*.apk"
+          path: artifacts/*.apk
           retention-days: 30
-        if: always()
 
   release:
     needs: [build-ipk, build-apk]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-      
+
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             ups-monitor-ipk-x86_64/*.ipk
