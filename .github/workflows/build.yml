@@ -88,7 +88,9 @@ jobs:
           ls -la sdk/package/luci-app-ups-monitor
 
       - name: Configure
+        shell: bash
         run: |
+          set -o pipefail
           cd sdk
           make defconfig 2>&1 | tee defconfig.log
           echo 'CONFIG_PACKAGE_luci-app-ups-monitor=m' >> .config
@@ -97,7 +99,9 @@ jobs:
           grep -q '^CONFIG_PACKAGE_luci-app-ups-monitor=m' .config
 
       - name: Compile
+        shell: bash
         run: |
+          set -o pipefail
           cd sdk
           make package/luci-app-ups-monitor/compile V=s -j"$(nproc)" 2>&1 | tee compile.log
 
@@ -126,10 +130,10 @@ jobs:
         run: |
           for LOG in sdk/compile.log sdk/defconfig.log; do
             [ -s "$LOG" ] || continue
-            MSG=$(tail -n 12 "$LOG" | tr -d '\r' | sed 's/%/%25/g' | awk 'BEGIN { ORS="%0A" } { print }' | cut -c1-900)
+            MSG=$( { grep -nE 'Error|error:|ERROR|failed|\*\*\*|No rule' "$LOG" | tail -n 12; tail -n 6 "$LOG"; } \
+              | tr -d '\r' | sed 's/%/%25/g' | awk 'BEGIN { ORS="%0A" } { print }' | cut -c1-900 )
             echo "::error::${LOG}: ${MSG}"
           done
-          echo "::error::see job log for details"
 
       - uses: actions/upload-artifact@v4
         with:
