@@ -159,6 +159,16 @@ jobs:
           path: release
           merge-multiple: true
 
+      - name: Pick tag
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+            echo "RELEASE_NAME=UPS Monitor $GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          else
+            echo "TAG=latest" >> "$GITHUB_ENV"
+            echo "RELEASE_NAME=UPS Monitor latest build" >> "$GITHUB_ENV"
+          fi
+
       - name: List downloaded files
         run: |
           MSG=$( { echo "PWD=$PWD"; find . -maxdepth 3 -type f | sort; } \
@@ -174,15 +184,18 @@ jobs:
           sha256sum ./* > sha256sums.txt
           cat sha256sums.txt
 
-      - name: Pick tag
+      - name: Remove stale assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
-            echo "RELEASE_NAME=UPS Monitor $GITHUB_REF_NAME" >> "$GITHUB_ENV"
-          else
-            echo "TAG=latest" >> "$GITHUB_ENV"
-            echo "RELEASE_NAME=UPS Monitor latest build" >> "$GITHUB_ENV"
-          fi
+          REL=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}")
+          for id in $(echo "$REL" | python3 -c "import json,sys; d=json.load(sys.stdin); print(' '.join(str(a['id']) for a in d.get('assets', [])))"); do
+            echo "deleting asset $id"
+            curl -s -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/assets/$id"
+          done
 
       - uses: softprops/action-gh-release@v2
         with:

@@ -9,8 +9,6 @@ PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=ospfx
 
-PKGARCH:=all
-
 include $(INCLUDE_DIR)/package.mk
 
 define Package/luci-app-ups-monitor
@@ -20,6 +18,7 @@ define Package/luci-app-ups-monitor
   TITLE:=Modern UPS monitoring dashboard for NUT
   URL:=https://github.com/ospfx/ups-monitor
   DEPENDS:=+luci-base +nut-upsc
+  PKGARCH:=all
 endef
 
 define Package/luci-app-ups-monitor/description
