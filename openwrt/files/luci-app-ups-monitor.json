@@ -17,5 +17,27 @@
 		"auth": {
 			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
 		}
+	},
+
+	"admin/services/ups-monitor/commands": {
+		"action": {
+			"type": "function",
+			"module": "luci.controller.ups_monitor",
+			"function": "action_commands"
+		},
+		"auth": {
+			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+		}
+	},
+
+	"admin/services/ups-monitor/run-command": {
+		"action": {
+			"type": "function",
+			"module": "luci.controller.ups_monitor",
+			"function": "action_run_command"
+		},
+		"auth": {
+			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+		}
 	}
 }

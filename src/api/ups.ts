@@ -9,6 +9,8 @@ const api = axios.create({
 })
 
 const API_URL = '/cgi-bin/luci/admin/services/ups-monitor/data'
+const COMMANDS_URL = '/cgi-bin/luci/admin/services/ups-monitor/commands'
+const RUN_COMMAND_URL = '/cgi-bin/luci/admin/services/ups-monitor/run-command'
 
 // Development-only sample data, used when no router is reachable.
 const mockData: UPSStatus = {
@@ -38,6 +40,13 @@ const mockData: UPSStatus = {
   lastUpdate: Date.now()
 }
 
+const mockCommands: UPSCommand[] = [
+  { name: 'beeper.toggle', description: 'Toggle the UPS beeper' },
+  { name: 'test.battery.start', description: 'Start a battery test' },
+  { name: 'test.battery.start.quick', description: 'Start a quick battery test' },
+  { name: 'test.battery.stop', description: 'Stop the battery test' }
+]
+
 export const upsApi = {
   async getStatus(upsName: string = 'ups'): Promise<UPSStatus> {
     try {
@@ -60,8 +69,38 @@ export const upsApi = {
     return []
   },
 
-  async getCommands(_upsName: string = 'ups'): Promise<UPSCommand[]> {
-    return []
+  async getCommands(upsName: string = 'ups'): Promise<UPSCommand[]> {
+    try {
+      const response = await api.get(COMMANDS_URL, {
+        params: { ups: upsName }
+      })
+      if (typeof response.data !== 'object' || !Array.isArray(response.data.commands))
+        throw new Error('命令接口返回格式错误')
+      return response.data.commands
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('Commands API unreachable, using mock data', error)
+        return mockCommands
+      }
+      throw new Error('无法获取 UPS 命令列表')
+    }
+  },
+
+  async runCommand(upsName: string = 'ups', command: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const response = await api.get(RUN_COMMAND_URL, {
+        params: { ups: upsName, command }
+      })
+      if (typeof response.data !== 'object')
+        throw new Error('命令执行接口返回格式错误')
+      return response.data
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('Run command API unreachable, simulating success', error)
+        return { success: true, message: '命令已执行（模拟）' }
+      }
+      throw new Error('执行 UPS 命令失败')
+    }
   }
 }
 

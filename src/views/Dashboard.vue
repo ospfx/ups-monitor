@@ -5,6 +5,7 @@ import StatusCard from '@/components/StatusCard.vue'
 import BatteryCard from '@/components/BatteryCard.vue'
 import PowerCard from '@/components/PowerCard.vue'
 import ChartCard from '@/components/ChartCard.vue'
+import ControlCard from '@/components/ControlCard.vue'
 
 const upsStore = useUPSStore()
 
@@ -28,6 +29,8 @@ onUnmounted(() => {
     </div>
     
     <ChartCard />
+    
+    <ControlCard />
     
     <div v-if="upsStore.error" class="card bg-red-500 bg-opacity-10 border-red-500">
       <div class="flex items-center gap-3">
