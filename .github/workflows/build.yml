@@ -73,13 +73,12 @@ jobs:
           test -n "$SDK_DIR"
           mv "$SDK_DIR" sdk
 
-      - name: Install feed metadata
+      - name: Prepare feeds.conf
         run: |
           cd sdk
-          [ -f feeds.conf ] || cp feeds.conf.default feeds.conf
-          ./scripts/feeds update luci packages
-          ./scripts/feeds install luci-base
-          ./scripts/feeds install nut
+          if [ ! -f feeds.conf ]; then
+            if [ -f feeds.conf.default ]; then cp feeds.conf.default feeds.conf; else touch feeds.conf; fi
+          fi
 
       - name: Prepare package tree
         run: |
@@ -95,7 +94,10 @@ jobs:
           cd sdk
           make defconfig 2>&1 | tee defconfig.log
           echo 'CONFIG_PACKAGE_luci-app-ups-monitor=m' >> .config
-          make defconfig 2>&1 | tee -a defconfig.log
+          for sym in CONFIG_SIGN_EACH_PACKAGE CONFIG_SIGN_PACKAGES CONFIG_SIGN_APK; do
+            sed -i "/^${sym}=/d" .config
+            echo "# ${sym} is not set" >> .config
+          done
           grep -n 'luci-app-ups-monitor' .config || true
           grep -q '^CONFIG_PACKAGE_luci-app-ups-monitor=m' .config
 
