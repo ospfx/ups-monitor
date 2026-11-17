@@ -72,14 +72,37 @@ jobs:
           test -n "$SDK_DIR"
           mv "$SDK_DIR" sdk
 
-      - name: Build package
+      - name: Prepare package tree
         run: |
           mkdir -p sdk/package/luci-app-ups-monitor
           cp -r openwrt/. sdk/package/luci-app-ups-monitor/
           cp -r dist sdk/package/luci-app-ups-monitor/dist
+          ls -la sdk/package/luci-app-ups-monitor
+
+      - name: Configure
+        run: |
           cd sdk
-          make defconfig
-          make package/luci-app-ups-monitor/compile V=s -j"$(nproc)"
+          make defconfig 2>&1 | tee defconfig.log
+          echo 'CONFIG_PACKAGE_luci-app-ups-monitor=m' >> .config
+          make defconfig 2>&1 | tee -a defconfig.log
+          grep -n 'luci-app-ups-monitor' .config || true
+
+      - name: Compile
+        run: |
+          cd sdk
+          make package/luci-app-ups-monitor/compile V=s -j"$(nproc)" 2>&1 | tee compile.log
+
+      - name: Report build failure
+        if: failure()
+        run: |
+          LOG=sdk/compile.log
+          [ -s "$LOG" ] || LOG=sdk/defconfig.log
+          if [ -s "$LOG" ]; then
+            MSG=$(tail -n 15 "$LOG" | tr -d '\r' | sed 's/%/%25/g' | awk 'BEGIN { ORS="%0A" } { print }' | cut -c1-900)
+            echo "::error::${MSG}"
+          else
+            echo "::error::build failed before writing a log"
+          fi
 
       - name: Collect package
         run: |
