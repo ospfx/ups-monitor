@@ -30,8 +30,8 @@ define Package/luci-app-ups-monitor/description
 endef
 
 define Build/Prepare
-	mkdir -p $(PKG_BUILD_DIR)
-	$(CP) ./dist/. $(PKG_BUILD_DIR)/
+	mkdir -p $(PKG_BUILD_DIR)/dist
+	$(CP) ./dist/. $(PKG_BUILD_DIR)/dist/
 endef
 
 define Build/Compile
@@ -42,7 +42,7 @@ define Package/luci-app-ups-monitor/install
 	$(INSTALL_DIR) $(1)/www/cgi-bin
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/ups-monitor
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
-	$(CP) $(PKG_BUILD_DIR)/. $(1)/www/ups/
+	$(CP) $(PKG_BUILD_DIR)/dist/. $(1)/www/ups/
 	$(INSTALL_BIN) ./files/ups-api.sh $(1)/www/cgi-bin/ups-api.sh
 	$(INSTALL_DATA) ./files/view/redirect.js $(1)/www/luci-static/resources/view/ups-monitor/redirect.js
 	$(INSTALL_DATA) ./files/luci-app-ups-monitor.json $(1)/usr/share/luci/menu.d/luci-app-ups-monitor.json
