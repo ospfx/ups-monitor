@@ -4,7 +4,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-ups-monitor
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.1.0
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=ospfx
@@ -23,9 +23,9 @@ endef
 
 define Package/luci-app-ups-monitor/description
   A modern, responsive UPS dashboard for OpenWrt/ImmortalWrt.
-  Reads live values from a local NUT server through a small CGI
-  helper (upsc) and renders them with Vue 3 and ECharts.
-  Adds an entry to the LuCI "Services" menu.
+  Runs inside LuCI ("Services -> UPS Monitor") and reads live values
+  from the local NUT server through a session-protected JSON endpoint
+  backed by upsc.
 endef
 
 define Build/Prepare
@@ -38,19 +38,22 @@ endef
 
 define Package/luci-app-ups-monitor/install
 	$(INSTALL_DIR) $(1)/www/ups
-	$(INSTALL_DIR) $(1)/www/cgi-bin
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/ups-monitor
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
+	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/controller
 	$(CP) $(PKG_BUILD_DIR)/dist/. $(1)/www/ups/
-	$(INSTALL_BIN) ./files/ups-api.sh $(1)/www/cgi-bin/ups-api.sh
-	$(INSTALL_DATA) ./files/view/redirect.js $(1)/www/luci-static/resources/view/ups-monitor/redirect.js
+	$(INSTALL_DATA) ./files/view/dashboard.js $(1)/www/luci-static/resources/view/ups-monitor/dashboard.js
+	$(INSTALL_DATA) ./files/controller/ups_monitor.uc $(1)/usr/share/ucode/luci/controller/ups_monitor.uc
 	$(INSTALL_DATA) ./files/luci-app-ups-monitor.json $(1)/usr/share/luci/menu.d/luci-app-ups-monitor.json
 endef
 
 define Package/luci-app-ups-monitor/postinst
 #!/bin/sh
-[ -n "$${IPKG_INSTROOT}" ] && exit 0
-rm -f /tmp/luci-indexcache /tmp/luci-indexcache.* 2>/dev/null
+case "$${IPKG_INSTROOT}" in
+	""|"/")
+		rm -f /tmp/luci-indexcache /tmp/luci-indexcache.*.json 2>/dev/null
+		;;
+esac
 exit 0
 endef
 

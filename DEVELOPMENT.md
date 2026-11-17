@@ -11,7 +11,7 @@ npm install
 npm run dev        # http://localhost:3000/ups/
 ```
 
-开发服务器把 `/cgi-bin` 代理到 `vite.config.ts` 里的 `target`（默认 `192.168.1.1`），改成你的路由器地址即可联调真实数据。连不上时开发模式会回退到内置模拟数据，生产构建不会。
+开发服务器把 `/cgi-bin` 代理到 `vite.config.ts` 里的 `target`（默认 `192.168.1.1`），改成你的路由器地址即可联调真实数据。真实数据接口要求 LuCI 登录会话，开发时可直接用模拟数据（`npm run dev` 下自动回退），生产构建不会。
 
 ## 前端构建
 
@@ -26,9 +26,9 @@ npm run build      # vue-tsc + vite build
 ```
 openwrt/                 OpenWrt 打包文件
   Makefile               包定义（luci-app-ups-monitor）
-  files/ups-api.sh       CGI，调用 upsc 输出 JSON
-  files/view/redirect.js LuCI 菜单跳转页
-  files/luci-app-ups-monitor.json  LuCI 菜单定义
+  files/controller/ups_monitor.uc  LuCI 接口，调用 upsc 输出 JSON（需登录）
+  files/view/dashboard.js          LuCI 页面，内嵌 /ups/ 面板
+  files/luci-app-ups-monitor.json  LuCI 菜单/路由定义
 src/                     前端源码
 public/                  静态资源
 ```

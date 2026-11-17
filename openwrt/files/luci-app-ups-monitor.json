@@ -4,7 +4,18 @@
 		"order": 60,
 		"action": {
 			"type": "view",
-			"path": "ups-monitor/redirect"
+			"path": "ups-monitor/dashboard"
+		}
+	},
+
+	"admin/services/ups-monitor/data": {
+		"action": {
+			"type": "function",
+			"module": "luci.controller.ups_monitor",
+			"function": "action_data"
+		},
+		"auth": {
+			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
 		}
 	}
 }

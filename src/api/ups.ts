@@ -1,11 +1,14 @@
 import axios from 'axios'
 import type { UPSStatus, UPSVariable, UPSCommand } from '@/types/ups'
 
-// Same-origin request to the CGI shipped by the package.
+// Same-origin request to the LuCI-protected JSON endpoint.
 const api = axios.create({
   baseURL: '',
-  timeout: 10000
+  timeout: 10000,
+  withCredentials: true
 })
+
+const API_URL = '/cgi-bin/luci/admin/services/ups-monitor/data'
 
 // Development-only sample data, used when no router is reachable.
 const mockData: UPSStatus = {
@@ -38,16 +41,18 @@ const mockData: UPSStatus = {
 export const upsApi = {
   async getStatus(upsName: string = 'ups'): Promise<UPSStatus> {
     try {
-      const response = await api.get('/cgi-bin/ups-api.sh', {
+      const response = await api.get(API_URL, {
         params: { ups: upsName }
       })
+      if (typeof response.data !== 'object' || response.data === null)
+        throw new Error('UPS 接口未返回 JSON，请先登录 LuCI')
       return normalizeStatus(response.data)
     } catch (error) {
       if (import.meta.env.DEV) {
         console.warn('UPS API unreachable, using mock data', error)
         return mockData
       }
-      throw new Error('无法连接 UPS 服务，请检查 NUT 是否运行、upsc 是否可用')
+      throw new Error('无法连接 UPS 服务，请确认已登录 LuCI 且 NUT 正在运行')
     }
   },
 

@@ -2,7 +2,7 @@
 
 现代、响应式的 UPS（不间断电源）监控面板，为 OpenWrt / ImmortalWrt 路由器提供 NUT（Network UPS Tools）实时状态展示。
 
-数据来自路由器本机的 NUT 服务（`upsc`），前端使用 Vue 3 + TypeScript + ECharts 构建，安装后可从 LuCI 的「服务 → UPS Monitor」进入，也可以直接访问 `http://<路由器IP>/ups/`。
+数据来自路由器本机的 NUT 服务（`upsc`），前端使用 Vue 3 + TypeScript + ECharts 构建。面板**内嵌在 LuCI 里**：登录 LuCI 后从「服务 → UPS Monitor」进入，数据接口同样要求 LuCI 登录会话，不会匿名暴露 UPS 状态。
 
 ## 功能
 
@@ -44,9 +44,10 @@ upsc ups
 
 ### 访问
 
-- LuCI 网页 →「服务」→「UPS Monitor」
-- 或直接打开 `http://<路由器IP>/ups/`
-- 多台 UPS：`http://<路由器IP>/ups/?ups=ups2`
+- LuCI 网页 →「服务」→「UPS Monitor」，面板在 LuCI 内容区中打开
+- 多台 UPS：`http://<路由器IP>/cgi-bin/luci/admin/services/ups-monitor?ups=ups2`，或面板地址后加 `?ups=ups2`
+
+面板本身是 `/ups/` 下的静态页面，但数据来自 `/cgi-bin/luci/admin/services/ups-monitor/data`，必须带有效的 LuCI 登录会话。未登录时直接打开 `/ups/` 只会提示无法连接。
 
 ## 配置
 
@@ -78,13 +79,7 @@ opkg remove luci-app-ups-monitor # opkg 系统
 
 **页面提示「无法连接 UPS 服务」**
 
-检查 CGI 是否可访问：
-
-```sh
-curl 'http://127.0.0.1/cgi-bin/ups-api.sh?ups=ups'
-```
-
-应返回一段 JSON。404 时确认 uhttpd 的 `cgi_prefix` 为 `/cgi-bin`（默认值）。使用 nginx 等其它 Web 服务器时，需要自行配置 CGI。
+先确认已登录 LuCI（刷新页面重新登录），再检查数据接口能否在会话内返回 JSON。也可以在 LuCI 里打开「服务 → UPS Monitor」直接看面板。接口 404 时确认 LuCI 路径是 `/cgi-bin/luci`（本包按默认路径安装）。
 
 **趋势图一直为空**
 
@@ -96,7 +91,7 @@ curl 'http://127.0.0.1/cgi-bin/ups-api.sh?ups=ups'
 
 ## 安全说明
 
-面板和 CGI 默认只靠路由器防火墙限制在局域网内，未做登录校验，请勿把 `/ups/` 或 `/cgi-bin/ups-api.sh` 暴露到公网。
+面板入口和数据接口都挂在 LuCI 的 `admin` 下，未登录无法取得 UPS 数据；`/ups/` 只是静态前端资源，不含数据。仍然不建议把 LuCI 暴露到公网。
 
 ## 开发
 
