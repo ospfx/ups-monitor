@@ -9,7 +9,8 @@ import ChartCard from '@/components/ChartCard.vue'
 const upsStore = useUPSStore()
 
 onMounted(() => {
-  upsStore.startAutoRefresh()
+  const upsName = new URLSearchParams(window.location.search).get('ups') || 'ups'
+  upsStore.startAutoRefresh(upsName)
 })
 
 onUnmounted(() => {

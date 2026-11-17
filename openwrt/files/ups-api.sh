@@ -1,72 +1,124 @@
 #!/bin/sh
-# UPS Monitor - NUT API Gateway
-# Returns JSON formatted UPS status data
+# UPS Monitor - JSON API for the NUT client (upsc)
+#
+# Usage: /cgi-bin/ups-api.sh[?ups=<upsname>]
+# Returns the subset of NUT variables used by the dashboard.
 
-echo "Content-Type: application/json"
-echo "Access-Control-Allow-Origin: *"
-echo ""
+printf 'Content-Type: application/json\r\n'
+printf 'Cache-Control: no-store\r\n'
+printf 'X-Content-Type-Options: nosniff\r\n'
+printf '\r\n'
 
-# Parse UPS name from query string (default: ups)
-UPS_NAME="${QUERY_STRING:-ups}"
+QUERY="${QUERY_STRING:-}"
+UPS_NAME="ups"
 
-# Query UPS data via upsc
-get_value() {
-	upsc "$UPS_NAME" "$1" 2>/dev/null || echo "${2:-0}"
+case "$QUERY" in
+	*ups=*)
+		UPS_NAME="${QUERY#*ups=}"
+		UPS_NAME="${UPS_NAME%%&*}"
+		;;
+	'')
+		;;
+	*)
+		# Backwards compatible: a bare query string is the UPS name
+		UPS_NAME="$QUERY"
+		;;
+esac
+
+case "$UPS_NAME" in
+	''|*[!A-Za-z0-9_.-]*)
+		UPS_NAME="ups"
+		;;
+esac
+
+get() {
+	local_value=$(upsc "$UPS_NAME" "$1" 2>/dev/null)
+	if [ -n "$local_value" ]; then
+		printf '%s' "$local_value"
+	else
+		printf '%s' "$2"
+	fi
 }
 
-# Get all values
-BATTERY_CHARGE=$(get_value "battery.charge")
-BATTERY_RUNTIME=$(get_value "battery.runtime")
-BATTERY_VOLTAGE=$(get_value "battery.voltage")
-BATTERY_TEMP=$(get_value "battery.temperature")
-INPUT_VOLTAGE=$(get_value "input.voltage" "220")
-INPUT_FREQ=$(get_value "input.frequency" "50")
-OUTPUT_VOLTAGE=$(get_value "output.voltage" "220")
-OUTPUT_FREQ=$(get_value "output.frequency" "50")
-OUTPUT_LOAD=$(get_value "ups.load")
-UPS_STATUS=$(get_value "ups.status" "OL")
-DEVICE_MFR=$(get_value "device.mfr" "Unknown")
-DEVICE_MODEL=$(get_value "device.model" "Unknown")
-DEVICE_SERIAL=$(get_value "device.serial")
+json_escape() {
+	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\r\n'
+}
 
-# Convert NUT status to frontend format
-case "$UPS_STATUS" in
-	*OL*) STATUS="online" ;;
-	*OB*) STATUS="onbatt" ;;
-	*OFF*) STATUS="offline" ;;
+num() {
+	awk -v v="$1" -v d="$2" 'BEGIN {
+		if (v ~ /^-?[0-9]+(\.[0-9]+)?$/) print v; else print d
+	}'
+}
+
+CHARGE=$(get battery.charge 0)
+RUNTIME=$(get battery.runtime 0)
+BATT_VOLT=$(get battery.voltage 0)
+BATT_TEMP=$(get battery.temperature "")
+INPUT_VOLT=$(get input.voltage 0)
+INPUT_FREQ=$(get input.frequency 0)
+OUTPUT_VOLT=$(get output.voltage "$INPUT_VOLT")
+OUTPUT_FREQ=$(get output.frequency "$INPUT_FREQ")
+LOAD=$(get ups.load 0)
+STATUS_RAW=$(get ups.status "")
+REALPOWER=$(get ups.realpower "")
+NOMINAL_POWER=$(get ups.realpower.nominal "")
+MFR=$(get device.mfr "")
+MODEL=$(get device.model "")
+SERIAL=$(get device.serial "")
+
+case " $STATUS_RAW " in
+	*" OL "*) STATUS="online" ;;
+	*" OB "*) STATUS="onbatt" ;;
+	*" OFF "*) STATUS="offline" ;;
 	*) STATUS="unknown" ;;
 esac
 
-# Calculate power (W) from load percentage
-POWER=$((OUTPUT_LOAD * 12))
+POWER=$(awk -v rp="$REALPOWER" -v nom="$NOMINAL_POWER" -v l="$LOAD" 'BEGIN {
+	if (rp ~ /^-?[0-9]+(\.[0-9]+)?$/ && rp + 0 > 0)
+		printf "%d", rp + 0;
+	else if (nom ~ /^-?[0-9]+(\.[0-9]+)?$/ && nom + 0 > 0 &&
+	         l ~ /^-?[0-9]+(\.[0-9]+)?$/ && l + 0 >= 0)
+		printf "%d", nom * l / 100;
+	else
+		print 0;
+}')
 
-# Output JSON
-cat << JSON
+TEMP_LINE=""
+if [ -n "$BATT_TEMP" ]; then
+	TEMP_LINE=",
+    \"temperature\": $(num "$BATT_TEMP" 0)"
+fi
+
+SERIAL_LINE=""
+if [ -n "$SERIAL" ]; then
+	SERIAL_LINE=",
+    \"serial\": \"$(json_escape "$SERIAL")\""
+fi
+
+cat <<JSON
 {
-  "name": "$UPS_NAME",
+  "name": "$(json_escape "$UPS_NAME")",
   "status": "$STATUS",
   "battery": {
-    "charge": ${BATTERY_CHARGE},
-    "runtime": ${BATTERY_RUNTIME},
-    "voltage": ${BATTERY_VOLTAGE}${BATTERY_TEMP:+,
-    "temperature": ${BATTERY_TEMP}}
+    "charge": $(num "$CHARGE" 0),
+    "runtime": $(num "$RUNTIME" 0),
+    "voltage": $(num "$BATT_VOLT" 0)${TEMP_LINE}
   },
   "input": {
-    "voltage": ${INPUT_VOLTAGE},
-    "frequency": ${INPUT_FREQ}
+    "voltage": $(num "$INPUT_VOLT" 0),
+    "frequency": $(num "$INPUT_FREQ" 0)
   },
   "output": {
-    "voltage": ${OUTPUT_VOLTAGE},
-    "frequency": ${OUTPUT_FREQ},
-    "load": ${OUTPUT_LOAD},
+    "voltage": $(num "$OUTPUT_VOLT" 0),
+    "frequency": $(num "$OUTPUT_FREQ" 0),
+    "load": $(num "$LOAD" 0),
     "power": ${POWER}
   },
   "device": {
-    "manufacturer": "$DEVICE_MFR",
-    "model": "$DEVICE_MODEL"${DEVICE_SERIAL:+,
-    "serial": "$DEVICE_SERIAL"},
+    "manufacturer": "$(json_escape "$MFR")",
+    "model": "$(json_escape "$MODEL")"${SERIAL_LINE},
     "type": "ups"
   },
-  "lastUpdate": $(date +%s)000
+  "lastUpdate": $(($(date +%s) * 1000))
 }
 JSON

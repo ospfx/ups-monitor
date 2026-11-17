@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
 export default defineConfig({
+  base: '/ups/',
   plugins: [vue()],
   resolve: {
     alias: {
@@ -12,10 +13,9 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': {
-        target: 'http://192.168.1.1',  // 修改为你的路由器 IP
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+      '/cgi-bin': {
+        target: 'http://192.168.1.1',  // 开发时改成你的路由器 IP
+        changeOrigin: true
       }
     }
   },

@@ -1,150 +1,151 @@
-name: Build Packages
+name: Build
 
 on:
   push:
-    branches: [ main, master ]
-    tags:
-      - 'v*'
+    branches: [ master ]
+    tags: [ 'v*' ]
   pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-frontend:
+  frontend:
+    name: Build frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Build frontend
+      - name: Build
         run: npx vite build
 
-      - name: Upload dist artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
           path: dist/
           retention-days: 7
 
-  build-ipk:
-    needs: build-frontend
+  package:
+    name: Package ${{ matrix.format }}
+    needs: frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - format: apk
+            sdk_base: https://downloads.immortalwrt.org/snapshots/targets/x86/64/
+          - format: ipk
+            sdk_base: https://downloads.immortalwrt.org/releases/24.10.4/targets/x86/64/
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download frontend artifact
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: dist/
 
-      - name: Setup OpenWrt 23.05 SDK
+      - name: Download SDK
         run: |
-          wget -q https://downloads.openwrt.org/releases/23.05.5/targets/x86/64/openwrt-sdk-23.05.5-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-          tar xf openwrt-sdk-*.tar.xz
-          mv openwrt-sdk-* openwrt-sdk
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zstd
+          BASE="${{ matrix.sdk_base }}"
+          FILE=$(curl -fsSL "$BASE" | grep -oE 'immortalwrt-sdk[^"]*\.tar\.zst' | head -1)
+          echo "SDK: $BASE$FILE"
+          test -n "$FILE"
+          curl -fsSL "$BASE$FILE" -o sdk.tar.zst
+          tar --zstd -xf sdk.tar.zst
+          SDK_DIR=$(find . -maxdepth 1 -type d -name 'immortalwrt-sdk-*' | head -1)
+          test -n "$SDK_DIR"
+          mv "$SDK_DIR" sdk
 
-      - name: Prepare package
+      - name: Build package
         run: |
-          mkdir -p openwrt-sdk/package/ups-monitor
-          cp openwrt/Makefile openwrt-sdk/package/ups-monitor/
-          mkdir -p openwrt-sdk/package/ups-monitor/files
-          cp openwrt/files/ups-api.sh openwrt-sdk/package/ups-monitor/files/
-          cp -r dist openwrt-sdk/package/ups-monitor/dist
-
-      - name: Build IPK
-        run: |
-          cd openwrt-sdk
+          mkdir -p sdk/package/luci-app-ups-monitor
+          cp -r openwrt/. sdk/package/luci-app-ups-monitor/
+          cp -r dist sdk/package/luci-app-ups-monitor/dist
+          cd sdk
           make defconfig
-          make package/ups-monitor/compile V=s -j$(nproc)
+          make package/luci-app-ups-monitor/compile V=s -j"$(nproc)"
 
-      - name: Collect IPK
+      - name: Collect package
         run: |
-          mkdir -p artifacts
-          find openwrt-sdk/bin -name "ups-monitor*.ipk" -exec cp {} artifacts/ \;
-          ls -lh artifacts/
+          mkdir -p out
+          find sdk/bin -type f -name 'luci-app-ups-monitor*' \
+            \( -name '*.apk' -o -name '*.ipk' \) -exec cp {} out/ \;
+          ls -lh out/
+          test -n "$(ls -A out)"
 
-      - name: Upload IPK artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: ups-monitor-ipk-x86_64
-          path: artifacts/*.ipk
-          retention-days: 30
-
-  build-apk:
-    needs: build-frontend
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download frontend artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist/
-
-      - name: Setup OpenWrt 24.10 SDK
-        run: |
-          sudo apt-get install -y zstd
-          wget -q "https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst" || \
-            wget -q "https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.xz"
-          tar xf openwrt-sdk-*.tar.* --use-compress-program=auto 2>/dev/null || tar xf openwrt-sdk-*.tar.zst || tar xf openwrt-sdk-*.tar.xz
-          mv openwrt-sdk-* openwrt-sdk
-
-      - name: Prepare package
-        run: |
-          mkdir -p openwrt-sdk/package/ups-monitor
-          cp openwrt/Makefile openwrt-sdk/package/ups-monitor/
-          mkdir -p openwrt-sdk/package/ups-monitor/files
-          cp openwrt/files/ups-api.sh openwrt-sdk/package/ups-monitor/files/
-          cp -r dist openwrt-sdk/package/ups-monitor/dist
-
-      - name: Build APK
-        run: |
-          cd openwrt-sdk
-          make defconfig
-          make package/ups-monitor/compile V=s -j$(nproc)
-
-      - name: Collect APK
-        run: |
-          mkdir -p artifacts
-          find openwrt-sdk/bin -name "ups-monitor*.apk" -exec cp {} artifacts/ \;
-          ls -lh artifacts/
-          if ! ls artifacts/*.apk >/dev/null 2>&1; then
-            echo "ERROR: no apk produced"
-            exit 1
-          fi
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ups-monitor-apk-x86_64
-          path: artifacts/*.apk
+          name: pkg-${{ matrix.format }}
+          path: out/*
           retention-days: 30
 
   release:
-    needs: [build-ipk, build-apk]
+    name: Release
+    needs: package
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/download-artifact@v4
         with:
-          files: |
-            ups-monitor-ipk-x86_64/*.ipk
-            ups-monitor-apk-x86_64/*.apk
-          generate_release_notes: true
+          path: release
+          merge-multiple: true
+
+      - name: Prepare assets
+        run: |
+          cd release
+          ls -lh
+          sha256sum * > sha256sums.txt
+          cat sha256sums.txt
+
+      - name: Pick tag
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+            echo "RELEASE_NAME=UPS Monitor $GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          else
+            echo "TAG=latest" >> "$GITHUB_ENV"
+            echo "RELEASE_NAME=UPS Monitor latest build" >> "$GITHUB_ENV"
+          fi
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.RELEASE_NAME }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: release/*
+          body: |
+            UPS Monitor 自动构建（${{ github.sha }}）。
+
+            **安装**
+
+            ```sh
+            # ImmortalWrt / OpenWrt SNAPSHOT (apk)
+            apk add --allow-untrusted ./luci-app-ups-monitor-*.apk
+
+            # OpenWrt / ImmortalWrt 24.10 及更早 (opkg)
+            opkg install ./luci-app-ups-monitor_*.ipk
+            ```
+
+            依赖 `luci-base`、`nut-upsc` 会由包管理器自动安装。安装后从 LuCI「服务 → UPS Monitor」进入，或访问 `http://<路由器IP>/ups/`。
+
+            使用说明见仓库 README，校验值见 `sha256sums.txt`。
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

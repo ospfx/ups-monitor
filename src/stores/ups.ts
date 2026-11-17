@@ -31,7 +31,7 @@ export const useUPSStore = defineStore('ups', () => {
     try {
       status.value = await upsApi.getStatus(upsName)
     } catch (e) {
-      error.value = '获取UPS状态失败'
+      error.value = e instanceof Error ? e.message : '获取 UPS 状态失败'
       console.error(e)
     } finally {
       loading.value = false
