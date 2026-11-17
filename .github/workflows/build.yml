@@ -61,7 +61,7 @@ jobs:
       - name: Download SDK
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq zstd
+          sudo apt-get install -y -qq zstd coreutils
           BASE="${{ matrix.sdk_base }}"
           FILE=$(curl -fsSL "$BASE" | grep -oE 'immortalwrt-sdk[^"]*\.tar\.zst' | head -1)
           echo "SDK: $BASE$FILE"
@@ -92,9 +92,9 @@ jobs:
         run: |
           set -o pipefail
           cd sdk
-          make defconfig 2>&1 | tee defconfig.log
+          make FORCE=1 defconfig 2>&1 | tee defconfig.log
           echo 'CONFIG_PACKAGE_luci-app-ups-monitor=m' >> .config
-          make defconfig 2>&1 | tee -a defconfig.log
+          make FORCE=1 defconfig 2>&1 | tee -a defconfig.log
           grep -n 'luci-app-ups-monitor' .config || true
           grep -q '^CONFIG_PACKAGE_luci-app-ups-monitor=m' .config
 
@@ -103,7 +103,9 @@ jobs:
         run: |
           set -o pipefail
           cd sdk
-          make package/luci-app-ups-monitor/compile V=s -j"$(nproc)" 2>&1 | tee compile.log
+          # Build only this package; runtime DEPENDS (luci-base, nut-upsc)
+          # are resolved by apk/opkg on the router, not compiled here.
+          make -C package/luci-app-ups-monitor TOPDIR="$PWD" compile V=s -j"$(nproc)" 2>&1 | tee compile.log
 
 
       - name: Collect package
