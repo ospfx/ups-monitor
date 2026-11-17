@@ -3,7 +3,9 @@
 
 return view.extend({
 	render: function() {
-		const query = window.location.search || '';
+		const params = new URLSearchParams(window.location.search || '');
+		params.set('embed', '1');
+		const query = '?' + params.toString();
 
 		return E('div', {
 			'style': 'height: calc(100vh - 150px); margin: -16px;'

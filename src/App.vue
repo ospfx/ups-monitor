@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+
+// Embedded inside the LuCI view: hide the app header to avoid duplication.
+const embed = new URLSearchParams(window.location.search).has('embed')
 </script>
 
 <template>
   <div class="min-h-screen bg-dark-bg">
-    <header class="border-b border-dark-border bg-dark-surface">
+    <header v-if="!embed" class="border-b border-dark-border bg-dark-surface">
       <div class="container mx-auto px-4 py-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
@@ -22,7 +25,7 @@ import { RouterView } from 'vue-router'
       </div>
     </header>
     
-    <main class="container mx-auto px-4 py-6">
+    <main :class="['container mx-auto px-4', embed ? 'py-3' : 'py-6']">
       <RouterView />
     </main>
   </div>
