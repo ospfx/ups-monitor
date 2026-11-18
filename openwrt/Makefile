@@ -45,6 +45,7 @@ define Package/luci-app-ups-monitor/install
 	$(INSTALL_DIR) $(1)/usr/lib/nut
 	$(CP) $(PKG_BUILD_DIR)/dist/. $(1)/www/ups/
 	$(INSTALL_DATA) ./files/view/dashboard.js $(1)/www/luci-static/resources/view/ups-monitor/dashboard.js
+	$(INSTALL_DATA) ./files/view/config.js $(1)/www/luci-static/resources/view/ups-monitor/config.js
 	$(INSTALL_DATA) ./files/controller/ups_monitor.uc $(1)/usr/share/ucode/luci/controller/ups_monitor.uc
 	$(INSTALL_DATA) ./files/luci-app-ups-monitor.json $(1)/usr/share/luci/menu.d/luci-app-ups-monitor.json
 	$(INSTALL_DATA) ./files/etc/config/nut_server $(1)/usr/share/ups-monitor/nut_server.default

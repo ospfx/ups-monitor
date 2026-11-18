@@ -7,7 +7,6 @@
 			"path": "ups-monitor/dashboard"
 		}
 	},
-
 	"admin/services/ups-monitor/data": {
 		"action": {
 			"type": "function",
@@ -15,10 +14,12 @@
 			"function": "action_data"
 		},
 		"auth": {
-			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+			"methods": [
+				"cookie:sysauth_https",
+				"cookie:sysauth_http"
+			]
 		}
 	},
-
 	"admin/services/ups-monitor/commands": {
 		"action": {
 			"type": "function",
@@ -26,10 +27,12 @@
 			"function": "action_commands"
 		},
 		"auth": {
-			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+			"methods": [
+				"cookie:sysauth_https",
+				"cookie:sysauth_http"
+			]
 		}
 	},
-
 	"admin/services/ups-monitor/run-command": {
 		"action": {
 			"type": "function",
@@ -37,10 +40,12 @@
 			"function": "action_run_command"
 		},
 		"auth": {
-			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+			"methods": [
+				"cookie:sysauth_https",
+				"cookie:sysauth_http"
+			]
 		}
 	},
-
 	"admin/services/ups-monitor/get-config": {
 		"action": {
 			"type": "function",
@@ -48,10 +53,12 @@
 			"function": "action_get_config"
 		},
 		"auth": {
-			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+			"methods": [
+				"cookie:sysauth_https",
+				"cookie:sysauth_http"
+			]
 		}
 	},
-
 	"admin/services/ups-monitor/save-config": {
 		"action": {
 			"type": "function",
@@ -59,10 +66,12 @@
 			"function": "action_save_config"
 		},
 		"auth": {
-			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+			"methods": [
+				"cookie:sysauth_https",
+				"cookie:sysauth_http"
+			]
 		}
 	},
-
 	"admin/services/ups-monitor/detect-devices": {
 		"action": {
 			"type": "function",
@@ -70,10 +79,12 @@
 			"function": "action_detect_devices"
 		},
 		"auth": {
-			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+			"methods": [
+				"cookie:sysauth_https",
+				"cookie:sysauth_http"
+			]
 		}
 	},
-
 	"admin/services/ups-monitor/list-drivers": {
 		"action": {
 			"type": "function",
@@ -81,7 +92,18 @@
 			"function": "action_list_drivers"
 		},
 		"auth": {
-			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+			"methods": [
+				"cookie:sysauth_https",
+				"cookie:sysauth_http"
+			]
+		}
+	},
+	"admin/services/ups-monitor/config": {
+		"title": "NUT 配置",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "ups-monitor/config"
 		}
 	}
 }
