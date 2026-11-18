@@ -9,6 +9,9 @@ import ControlCard from '@/components/ControlCard.vue'
 
 const upsStore = useUPSStore()
 
+// Check if embedded in LuCI
+const isEmbedded = new URLSearchParams(window.location.search).has('embed')
+
 onMounted(() => {
   const upsName = new URLSearchParams(window.location.search).get('ups') || 'ups'
   upsStore.startAutoRefresh(upsName)
@@ -21,6 +24,16 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-6">
+    <!-- 配置按钮（仅在非嵌入模式显示） -->
+    <div v-if="!isEmbedded" class="flex justify-end">
+      <a
+        href="/ups/config"
+        class="px-4 py-2 rounded-lg bg-accent-cyan text-dark-bg font-medium hover:bg-cyan-600 transition-colors"
+      >
+        ⚙️ NUT 配置
+      </a>
+    </div>
+    
     <StatusCard />
     
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">

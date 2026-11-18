@@ -203,3 +203,237 @@ function action_run_command() {
 }
 
 return { action_data, action_commands, action_run_command, get_data, get_commands, run_command };
+
+function get_config() {
+	let config = {
+		drivers: [],
+		upsd: null,
+		users: []
+	};
+	
+	// Get driver configurations
+	let handle = fs.popen('uci -q show nut_server 2>/dev/null');
+	if (handle) {
+		let output = handle.read('all');
+		handle.close();
+		
+		for (let line in split(output, '\n')) {
+			line = trim(line);
+			if (!length(line)) continue;
+			
+			if (match(line, /^nut_server\..*=driver$/)) {
+				let section = split(split(line, '.')[1], '=')[0];
+				let driver = {
+					name: section,
+					enabled: uci_get('nut_server', section, 'enabled') == '1',
+					driver: uci_get('nut_server', section, 'driver') || 'usbhid-ups',
+					port: uci_get('nut_server', section, 'port') || 'auto',
+					desc: uci_get('nut_server', section, 'desc') || ''
+				};
+				push(config.drivers, driver);
+			}
+			else if (match(line, /^nut_server\.upsd=/)) {
+				config.upsd = {
+					enabled: uci_get('nut_server', 'upsd', 'enabled') == '1',
+					listen_address: uci_get('nut_server', 'upsd', 'listen_address') || '127.0.0.1',
+					listen_port: int(uci_get('nut_server', 'upsd', 'listen_port') || '3493')
+				};
+			}
+			else if (match(line, /^nut_server\..*=user$/)) {
+				let section = split(split(line, '.')[1], '=')[0];
+				let user = {
+					name: section,
+					password: uci_get('nut_server', section, 'password') || '',
+					actions: uci_get('nut_server', section, 'actions') || '',
+					instcmds: uci_get('nut_server', section, 'instcmds') || '',
+					upsmon: uci_get('nut_server', section, 'upsmon') || ''
+				};
+				push(config.users, user);
+			}
+		}
+	}
+	
+	return config;
+}
+
+function uci_get(config, section, option) {
+	let handle = fs.popen(sprintf('uci -q get %s.%s.%s 2>/dev/null', config, section, option));
+	if (!handle) return null;
+	let value = handle.read('all');
+	handle.close();
+	return trim(value ?? '');
+}
+
+function save_config(config_data) {
+	// Validate input
+	if (type(config_data) != 'object')
+		return { success: false, error: 'Invalid configuration data' };
+	
+	// Save driver configuration
+	if (type(config_data.drivers) == 'array') {
+		for (let driver in config_data.drivers) {
+			let name = driver.name || 'ups';
+			
+			// Create or update driver section
+			system(sprintf("uci -q delete nut_server.%s 2>/dev/null; uci set nut_server.%s=driver", name, name));
+			system(sprintf("uci set nut_server.%s.enabled='%s'", name, driver.enabled ? '1' : '0'));
+			system(sprintf("uci set nut_server.%s.driver='%s'", name, driver.driver || 'usbhid-ups'));
+			system(sprintf("uci set nut_server.%s.port='%s'", name, driver.port || 'auto'));
+			system(sprintf("uci set nut_server.%s.desc='%s'", name, driver.desc || 'UPS Device'));
+		}
+	}
+	
+	// Save upsd configuration
+	if (type(config_data.upsd) == 'object') {
+		system("uci -q delete nut_server.upsd 2>/dev/null; uci set nut_server.upsd=upsd");
+		system(sprintf("uci set nut_server.upsd.enabled='%s'", config_data.upsd.enabled ? '1' : '0'));
+		system(sprintf("uci set nut_server.upsd.listen_address='%s'", config_data.upsd.listen_address || '127.0.0.1'));
+		system(sprintf("uci set nut_server.upsd.listen_port='%d'", int(config_data.upsd.listen_port) || 3493));
+	}
+	
+	// Save user configuration
+	if (type(config_data.users) == 'array') {
+		for (let user in config_data.users) {
+			let name = user.name || 'admin';
+			
+			system(sprintf("uci -q delete nut_server.%s 2>/dev/null; uci set nut_server.%s=user", name, name));
+			system(sprintf("uci set nut_server.%s.password='%s'", name, user.password || ''));
+			
+			if (length(user.actions))
+				system(sprintf("uci set nut_server.%s.actions='%s'", name, user.actions));
+			if (length(user.instcmds))
+				system(sprintf("uci set nut_server.%s.instcmds='%s'", name, user.instcmds));
+			if (length(user.upsmon))
+				system(sprintf("uci set nut_server.%s.upsmon='%s'", name, user.upsmon));
+		}
+	}
+	
+	// Commit changes
+	let commit_result = system('uci commit nut_server');
+	if (commit_result != 0)
+		return { success: false, error: 'Failed to commit UCI configuration' };
+	
+	// Convert UCI to NUT config files
+	let convert_result = system('/usr/lib/nut/uci-to-nut.sh 2>&1');
+	if (convert_result != 0)
+		return { success: false, error: 'Failed to convert UCI configuration' };
+	
+	// Restart NUT service
+	let restart_result = system('/etc/init.d/nut-server restart 2>&1');
+	if (restart_result != 0)
+		return { success: false, error: 'Failed to restart NUT service' };
+	
+	return { success: true, message: 'Configuration saved and service restarted' };
+}
+
+function detect_devices() {
+	let devices = [];
+	
+	// Check for hidraw devices
+	let handle = fs.popen('ls /dev/hidraw* 2>/dev/null');
+	if (handle) {
+		let output = handle.read('all');
+		handle.close();
+		
+		for (let device in split(output, '\n')) {
+			device = trim(device);
+			if (!length(device)) continue;
+			
+			// Try to get device info
+			let info_handle = fs.popen(sprintf('cat /sys/class/hidraw/%s/device/uevent 2>/dev/null', replace(device, '/dev/', '')));
+			if (info_handle) {
+				let info = info_handle.read('all');
+				info_handle.close();
+				
+				let name = '';
+				let vendor_id = '';
+				let product_id = '';
+				
+				for (let line in split(info, '\n')) {
+					if (match(line, /^HID_NAME=/))
+						name = replace(line, 'HID_NAME=', '');
+					else if (match(line, /^HID_ID=/)) {
+						let parts = split(replace(line, 'HID_ID=', ''), ':');
+						if (length(parts) >= 3) {
+							vendor_id = parts[1];
+							product_id = parts[2];
+						}
+					}
+				}
+				
+				push(devices, {
+					path: device,
+					name: name,
+					vendor_id: vendor_id,
+					product_id: product_id,
+					suggested_driver: 'usbhid-ups'
+				});
+			}
+		}
+	}
+	
+	return devices;
+}
+
+function list_drivers() {
+	let drivers = [
+		{ name: 'usbhid-ups', desc: 'USB HID UPS driver (most common)' },
+		{ name: 'blazer_usb', desc: 'Megatec/Q1 protocol USB driver' },
+		{ name: 'nutdrv_qx', desc: 'Q* protocol driver (Qx/Megatec)' },
+		{ name: 'blazer_ser', desc: 'Megatec/Q1 protocol serial driver' },
+		{ name: 'apcsmart', desc: 'APC Smart protocol serial driver' },
+		{ name: 'bcmxcp_usb', desc: 'BCM/XCP protocol USB driver' },
+		{ name: 'dummy-ups', desc: 'Dummy driver for testing' }
+	];
+	
+	return drivers;
+}
+
+function action_get_config() {
+	http.prepare_content('application/json; charset=UTF-8');
+	http.write_json(get_config());
+}
+
+function action_save_config() {
+	let content_type = http.getenv('CONTENT_TYPE') ?? '';
+	let content_length = int(http.getenv('CONTENT_LENGTH') ?? '0');
+	
+	if (content_length == 0) {
+		http.prepare_content('application/json; charset=UTF-8');
+		http.write_json({ success: false, error: 'No configuration data provided' });
+		return;
+	}
+	
+	let body = http.content();
+	let config_data = json(body);
+	
+	http.prepare_content('application/json; charset=UTF-8');
+	http.write_json(save_config(config_data));
+}
+
+function action_detect_devices() {
+	http.prepare_content('application/json; charset=UTF-8');
+	http.write_json({ devices: detect_devices() });
+}
+
+function action_list_drivers() {
+	http.prepare_content('application/json; charset=UTF-8');
+	http.write_json({ drivers: list_drivers() });
+}
+
+return {
+	action_data,
+	action_commands,
+	action_run_command,
+	action_get_config,
+	action_save_config,
+	action_detect_devices,
+	action_list_drivers,
+	get_data,
+	get_commands,
+	run_command,
+	get_config,
+	save_config,
+	detect_devices,
+	list_drivers
+};

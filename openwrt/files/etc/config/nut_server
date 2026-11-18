@@ -1,0 +1,19 @@
+config driver 'ups'
+	option enabled '1'
+	option driver 'blazer_usb'
+	option port 'auto'
+	option desc 'UPS Device'
+
+config upsd
+	option enabled '1'
+	option listen_address '127.0.0.1'
+	option listen_port '3493'
+
+config user 'admin'
+	option password 'admin'
+	option actions 'SET'
+	option instcmds 'ALL'
+
+config user 'monuser'
+	option password 'monpass'
+	option upsmon 'master'

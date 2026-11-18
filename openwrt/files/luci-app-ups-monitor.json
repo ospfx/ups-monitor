@@ -39,5 +39,49 @@
 		"auth": {
 			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
 		}
+	},
+
+	"admin/services/ups-monitor/get-config": {
+		"action": {
+			"type": "function",
+			"module": "luci.controller.ups_monitor",
+			"function": "action_get_config"
+		},
+		"auth": {
+			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+		}
+	},
+
+	"admin/services/ups-monitor/save-config": {
+		"action": {
+			"type": "function",
+			"module": "luci.controller.ups_monitor",
+			"function": "action_save_config"
+		},
+		"auth": {
+			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+		}
+	},
+
+	"admin/services/ups-monitor/detect-devices": {
+		"action": {
+			"type": "function",
+			"module": "luci.controller.ups_monitor",
+			"function": "action_detect_devices"
+		},
+		"auth": {
+			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+		}
+	},
+
+	"admin/services/ups-monitor/list-drivers": {
+		"action": {
+			"type": "function",
+			"module": "luci.controller.ups_monitor",
+			"function": "action_list_drivers"
+		},
+		"auth": {
+			"methods": [ "cookie:sysauth_https", "cookie:sysauth_http" ]
+		}
 	}
 }

@@ -142,3 +142,91 @@ function normalizeStatus(data: any): UPSStatus {
     lastUpdate: n(data?.lastUpdate, Date.now())
   }
 }
+
+const GET_CONFIG_URL = '/cgi-bin/luci/admin/services/ups-monitor/get-config'
+const SAVE_CONFIG_URL = '/cgi-bin/luci/admin/services/ups-monitor/save-config'
+const DETECT_DEVICES_URL = '/cgi-bin/luci/admin/services/ups-monitor/detect-devices'
+const LIST_DRIVERS_URL = '/cgi-bin/luci/admin/services/ups-monitor/list-drivers'
+
+export const configApi = {
+  async getConfig(): Promise<any> {
+    try {
+      const response = await api.get(GET_CONFIG_URL)
+      if (typeof response.data !== 'object')
+        throw new Error('配置接口返回格式错误')
+      return response.data
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('Config API unreachable, using mock data', error)
+        return {
+          drivers: [{ name: 'ups', enabled: true, driver: 'usbhid-ups', port: 'auto', desc: 'UPS Device' }],
+          upsd: { enabled: true, listen_address: '127.0.0.1', listen_port: 3493 },
+          users: [
+            { name: 'admin', password: 'admin', actions: 'SET', instcmds: 'ALL', upsmon: '' },
+            { name: 'monuser', password: 'monpass', actions: '', instcmds: '', upsmon: 'master' }
+          ]
+        }
+      }
+      throw new Error('无法获取配置信息')
+    }
+  },
+
+  async saveConfig(config: any): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const response = await api.post(SAVE_CONFIG_URL, config, {
+        headers: { 'Content-Type': 'application/json' }
+      })
+      if (typeof response.data !== 'object')
+        throw new Error('保存配置接口返回格式错误')
+      return response.data
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('Save config API unreachable, simulating success', error)
+        return { success: true, message: '配置已保存（模拟）' }
+      }
+      throw new Error('保存配置失败')
+    }
+  },
+
+  async detectDevices(): Promise<any[]> {
+    try {
+      const response = await api.get(DETECT_DEVICES_URL)
+      if (typeof response.data !== 'object' || !Array.isArray(response.data.devices))
+        throw new Error('设备检测接口返回格式错误')
+      return response.data.devices
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('Detect devices API unreachable, using mock data', error)
+        return [
+          {
+            path: '/dev/hidraw0',
+            name: 'INNO TECH USB to Serial',
+            vendor_id: '0665',
+            product_id: '5161',
+            suggested_driver: 'usbhid-ups'
+          }
+        ]
+      }
+      throw new Error('设备检测失败')
+    }
+  },
+
+  async listDrivers(): Promise<any[]> {
+    try {
+      const response = await api.get(LIST_DRIVERS_URL)
+      if (typeof response.data !== 'object' || !Array.isArray(response.data.drivers))
+        throw new Error('驱动列表接口返回格式错误')
+      return response.data.drivers
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('List drivers API unreachable, using mock data', error)
+        return [
+          { name: 'usbhid-ups', desc: 'USB HID UPS driver (most common)' },
+          { name: 'blazer_usb', desc: 'Megatec/Q1 protocol USB driver' },
+          { name: 'nutdrv_qx', desc: 'Q* protocol driver (Qx/Megatec)' }
+        ]
+      }
+      throw new Error('获取驱动列表失败')
+    }
+  }
+}
