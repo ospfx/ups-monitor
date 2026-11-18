@@ -204,6 +204,14 @@ function action_run_command() {
 
 return { action_data, action_commands, action_run_command, get_data, get_commands, run_command };
 
+function uci_get(config, section, option) {
+	let handle = fs.popen(sprintf('uci -q get %s.%s.%s 2>/dev/null', config, section, option));
+	if (!handle) return null;
+	let value = handle.read('all');
+	handle.close();
+	return trim(value ?? '');
+}
+
 function get_config() {
 	let config = {
 		drivers: [],
@@ -254,14 +262,6 @@ function get_config() {
 	}
 	
 	return config;
-}
-
-function uci_get(config, section, option) {
-	let handle = fs.popen(sprintf('uci -q get %s.%s.%s 2>/dev/null', config, section, option));
-	if (!handle) return null;
-	let value = handle.read('all');
-	handle.close();
-	return trim(value ?? '');
 }
 
 function save_config(config_data) {
