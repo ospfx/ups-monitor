@@ -104,7 +104,6 @@ function action_data() {
 	http.write_json(get_data(name));
 }
 
-return { action_data, get_data };
 
 function get_commands(name) {
 	name = normalize_name(name);
@@ -202,7 +201,6 @@ function action_run_command() {
 	http.write_json(run_command(name, command));
 }
 
-return { action_data, action_commands, action_run_command, get_data, get_commands, run_command };
 
 function uci_get(config, section, option) {
 	let handle = fs.popen(sprintf('uci -q get %s.%s.%s 2>/dev/null', config, section, option));
