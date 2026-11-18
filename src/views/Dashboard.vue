@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useUPSStore } from '@/stores/ups'
 import StatusCard from '@/components/StatusCard.vue'
 import BatteryCard from '@/components/BatteryCard.vue'
 import PowerCard from '@/components/PowerCard.vue'
 import ChartCard from '@/components/ChartCard.vue'
 import ControlCard from '@/components/ControlCard.vue'
+import ConfigCard from '@/components/ConfigCard.vue'
 
 const upsStore = useUPSStore()
+const activeTab = ref<'monitor' | 'config'>('monitor')
 
 // Check if embedded in LuCI
 const isEmbedded = new URLSearchParams(window.location.search).has('embed')
@@ -24,27 +26,52 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-6">
-    <!-- 配置按钮（仅在非嵌入模式显示） -->
-    <div v-if="!isEmbedded" class="flex justify-end">
-      <a
-        href="/ups/config"
-        class="px-4 py-2 rounded-lg bg-accent-cyan text-dark-bg font-medium hover:bg-cyan-600 transition-colors"
+    <!-- 标签页切换 -->
+    <div class="flex gap-2 border-b border-dark-border">
+      <button
+        @click="activeTab = 'monitor'"
+        :class="[
+          'px-4 py-2 font-medium transition-colors',
+          activeTab === 'monitor'
+            ? 'text-accent-cyan border-b-2 border-accent-cyan'
+            : 'text-gray-400 hover:text-gray-300'
+        ]"
+      >
+        📊 实时监控
+      </button>
+      <button
+        @click="activeTab = 'config'"
+        :class="[
+          'px-4 py-2 font-medium transition-colors',
+          activeTab === 'config'
+            ? 'text-accent-cyan border-b-2 border-accent-cyan'
+            : 'text-gray-400 hover:text-gray-300'
+        ]"
       >
         ⚙️ NUT 配置
-      </a>
+      </button>
     </div>
-    
-    <StatusCard />
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <BatteryCard />
-      <PowerCard />
+
+    <!-- 监控标签页 -->
+    <div v-if="activeTab === 'monitor'" class="space-y-6">
+      <StatusCard />
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <BatteryCard />
+        <PowerCard />
+      </div>
+      
+      <ChartCard />
+      
+      <ControlCard />
     </div>
-    
-    <ChartCard />
-    
-    <ControlCard />
-    
+
+    <!-- 配置标签页 -->
+    <div v-if="activeTab === 'config'" class="space-y-6">
+      <ConfigCard />
+    </div>
+
+    <!-- 错误提示 -->
     <div v-if="upsStore.error" class="card bg-red-500 bg-opacity-10 border-red-500">
       <div class="flex items-center gap-3">
         <svg class="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
